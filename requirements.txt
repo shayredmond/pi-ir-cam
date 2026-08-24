@@ -1,0 +1,4 @@
+# On the Pi, picamera2/numpy/PIL come from apt (python3-picamera2) —
+# create the venv with --system-site-packages so they're visible.
+fastapi
+uvicorn

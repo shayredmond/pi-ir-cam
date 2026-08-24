@@ -1,0 +1,4 @@
+# Extra deps for running the mock camera on a dev machine (no Pi needed).
+-r requirements.txt
+numpy
+pillow

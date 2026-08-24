@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+
+# Recording output bundles (mp4/csv/json triples)
+recordings/
+*.mp4
+
+# Local device config for the HA automation script (never commit)
+ha/devices.json

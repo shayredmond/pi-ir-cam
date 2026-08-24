@@ -1,0 +1,85 @@
+{
+  "_comment": [
+    "Copy to devices.json (gitignored) and describe your own hardware.",
+    "kind selects how a burst is produced:",
+    "  remote_raw       - remote.send_command with a raw b64 carrier packet",
+    "  remote_learned   - replay a learned command (for devices that drop raw sends)",
+    "  select_and_press - pick a learned signal slot, then press a Send button",
+    "  raw_action       - a custom action taking a raw code list (e.g. ESPHome)",
+    "  media_player     - repeated media_player.volume_up"
+  ],
+
+  "sweep": { "seconds": 10, "gap_seconds": 2 },
+
+  "tvs": [
+    {
+      "slug": "tv-a",
+      "name": "TV A",
+      "verify": "Verify received steps via its media_player volume_level (read before/after)."
+    },
+    {
+      "slug": "tv-b",
+      "name": "TV B",
+      "verify": "No integration for this TV expected - verify on screen."
+    }
+  ],
+
+  "devices": [
+    {
+      "slug": "blaster-a",
+      "name": "Blaster A",
+      "kind": "raw_action",
+      "entity": "custom.blaster_a_send_ir_nec",
+      "note": "Burst = sustained ~3 s continuous 38 kHz carrier via the raw action.",
+      "options": {
+        "raw_action": "custom.blaster_a_send_ir_raw",
+        "code_action": "custom.blaster_a_send_ir_nec",
+        "carrier_frequency": 38000,
+        "raw_data": { "emitter": 0 },
+        "tv_media_players": { "tv-a": "media_player.tv_a_via_blaster_a" },
+        "tv_codes": { "tv-b": { "address": 0, "command": 0 } }
+      }
+    },
+    {
+      "slug": "blaster-b",
+      "name": "Blaster B",
+      "kind": "remote_raw",
+      "entity": "remote.blaster_b",
+      "note": "Test burst sends a raw sustained-carrier b64 packet - no learning needed. Volume commands need learned codes (remote.learn_command).",
+      "options": {
+        "tv_command_devices": { "tv-a": "tv_a", "tv-b": "tv_b" }
+      }
+    },
+    {
+      "slug": "blaster-c",
+      "name": "Blaster C",
+      "kind": "remote_learned",
+      "entity": "remote.blaster_c",
+      "note": "Raw b64 sends are unreliable here, so the burst replays a learned command instead.",
+      "options": {
+        "learn_device": "pi_ir_test",
+        "learn_command": "test_burst",
+        "repeats_per_second": 5,
+        "tv_command_devices": { "tv-a": "tv_a", "tv-b": "tv_b" }
+      }
+    },
+    {
+      "slug": "blaster-d",
+      "name": "Blaster D",
+      "kind": "select_and_press",
+      "entity": "button.blaster_d_send",
+      "note": "Replays learned signal slots only. Learn a long signal into the burst slot for a near-continuous blast.",
+      "options": {
+        "select_entity": "select.blaster_d_signal_select",
+        "slots": { "burst": "Signal0", "tv-a": "Signal1", "tv-b": "Signal2" }
+      }
+    },
+    {
+      "slug": "blaster-e",
+      "name": "Blaster E",
+      "kind": "media_player",
+      "entity": "media_player.blaster_e_tv",
+      "note": "Hub-style blaster exposed as a virtual media_player."
+    }
+  ]
+}

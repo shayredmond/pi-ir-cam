@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi IR Cam</title>
+<style>
+  :root {
+    --bg: #101418;
+    --panel: #1a2027;
+    --panel-2: #232b34;
+    --border: #2e3842;
+    --text: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #4da3ff;
+    --rec: #ff4d5e;
+    --ok: #3fd68f;
+    --warn: #ffb454;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 20px; border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .badge.mock { color: var(--warn); border-color: var(--warn); }
+  #conn { margin-left: auto; font-size: 12px; color: var(--muted); }
+  #conn.err { color: var(--rec); }
+
+  main {
+    display: grid; grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 16px; padding: 16px 20px; max-width: 1500px; margin: 0 auto;
+  }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; margin-bottom: 14px;
+  }
+  .card h2 {
+    margin: 0 0 10px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  }
+
+  /* video */
+  .video-wrap { position: relative; background: #000; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .video-wrap img { display: block; width: 100%; }
+  .roi {
+    position: absolute; left: 40%; top: 40%; width: 20%; height: 20%;
+    border: 1.5px solid rgba(77,163,255,.8); border-radius: 4px;
+    pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,.12);
+  }
+  .rec-badge {
+    position: absolute; top: 10px; left: 10px; display: none;
+    background: var(--rec); color: #fff; font-weight: 700; font-size: 12px;
+    padding: 3px 10px; border-radius: 999px; align-items: center; gap: 6px;
+  }
+  .rec-badge.on { display: flex; }
+  .rec-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  /* meter */
+  .big { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  .big small { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .meter { height: 10px; background: var(--panel-2); border-radius: 999px; margin: 10px 0; overflow: hidden; }
+  .meter > div { height: 100%; width: 0%; background: linear-gradient(90deg, var(--ok), var(--warn) 75%, var(--rec)); border-radius: 999px; transition: width .2s; }
+  .statrow { display: flex; gap: 14px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .statrow b { color: var(--text); font-variant-numeric: tabular-nums; }
+  #clipwarn { display: none; color: var(--rec); font-size: 12px; margin-top: 8px; font-weight: 600; }
+
+  /* controls */
+  label.row { display: flex; align-items: center; gap: 8px; margin: 8px 0; cursor: pointer; }
+  .slider-row { margin: 10px 0 2px; }
+  .slider-row .top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .slider-row .top span:last-child { color: var(--accent); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=range]:disabled { opacity: .35; }
+  .actual { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+
+  input[type=text], textarea {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 14px;
+    font-family: inherit;
+  }
+  input[type=text]:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 52px; margin-top: 8px; }
+
+  button {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #08243f; font-weight: 700; }
+  button.danger { background: var(--rec); border-color: var(--rec); color: #fff; font-weight: 700; }
+  .btnrow { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  #recElapsed { font-variant-numeric: tabular-nums; color: var(--rec); font-weight: 600; }
+
+  /* recordings */
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  td { padding: 6px 4px; border-top: 1px solid var(--border); vertical-align: middle; }
+  td.name { word-break: break-all; }
+  td .size { color: var(--muted); white-space: nowrap; }
+  td a { color: var(--accent); text-decoration: none; }
+  td .meta { color: var(--muted); font-size: 11.5px; margin-top: 2px; white-space: pre-wrap; }
+  td .filelink { margin-left: 8px; font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; }
+  td button.del { padding: 2px 8px; font-size: 12px; color: var(--muted); }
+  #noRecs { color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pi IR Cam</h1>
+  <span class="badge" id="backendBadge">…</span>
+  <span id="conn">connecting…</span>
+</header>
+
+<main>
+  <section>
+    <div class="video-wrap">
+      <img id="stream" src="/stream.mjpg" alt="live stream">
+      <div class="roi" title="measurement ROI"></div>
+      <div class="rec-badge" id="recBadge"><span class="dot"></span>REC</div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>Recordings</h2>
+      <table id="recTable"></table>
+      <div id="noRecs">No recordings yet.</div>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>IR Brightness (ROI)</h2>
+      <div class="big"><span id="roiMean">–</span> <small>/ 255 mean luma</small></div>
+      <div class="meter"><div id="roiBar"></div></div>
+      <div class="statrow">
+        <span>peak <b id="roiMax">–</b></span>
+        <span>clipped <b id="roiClip">–</b></span>
+        <span>frame mean <b id="fullMean">–</b></span>
+        <span>lux <b id="lux">–</b></span>
+      </div>
+      <div id="clipwarn">⚠ ROI is clipping — lower exposure/gain for a valid comparison</div>
+    </div>
+
+    <div class="card">
+      <h2>Exposure</h2>
+      <label class="row"><input type="checkbox" id="ae"> Auto exposure <span style="color:var(--muted)">(turn off to compare devices)</span></label>
+      <div class="slider-row">
+        <div class="top"><span>Shutter</span><span id="expVal">–</span></div>
+        <input type="range" id="exp" min="0" max="1000" step="1">
+      </div>
+      <div class="slider-row">
+        <div class="top"><span>Analogue gain</span><span id="gainVal">–</span></div>
+        <input type="range" id="gain" min="1" max="16" step="0.1">
+      </div>
+      <label class="row"><input type="checkbox" id="awb"> Auto white balance</label>
+      <div class="actual" id="actual">actual: –</div>
+      <div style="border-top:1px solid var(--border); margin-top:12px; padding-top:12px">
+        <input type="text" id="calUrl" placeholder="Calibration webhook URL (HA automation that blasts ~3 s)">
+        <div class="btnrow">
+          <button id="calBtn">Calibrate exposure</button>
+        </div>
+        <div class="actual" id="calResult"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Focus</h2>
+      <label class="row"><input type="checkbox" id="af"> Continuous autofocus</label>
+      <div class="slider-row">
+        <div class="top"><span>Lens position</span><span id="lensVal">–</span></div>
+        <input type="range" id="lens" min="0" max="10" step="0.1">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Record</h2>
+      <input type="text" id="label" placeholder="Device under test, e.g. blaster-a" maxlength="60">
+      <textarea id="notes" placeholder="Scenario notes, e.g. 1 m distance, on-axis, NEC repeat @1 Hz" maxlength="2000"></textarea>
+      <div class="btnrow">
+        <button class="primary" id="recBtn">● Start recording</button>
+        <span id="recElapsed"></span>
+      </div>
+      <div class="btnrow">
+        <button id="snapBtn">Save snapshot</button>
+        <a id="snapLink" href="/snapshot.jpg" target="_blank" style="color:var(--accent);font-size:12.5px">view live still</a>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+const EXP_MIN = 30, EXP_MAX = 33000;
+const sliderToUs = v => Math.round(EXP_MIN * Math.pow(EXP_MAX / EXP_MIN, v / 1000));
+const usToSlider = us => Math.round(1000 * Math.log(us / EXP_MIN) / Math.log(EXP_MAX / EXP_MIN));
+const fmtUs = us => us >= 1000 ? (us / 1000).toFixed(1) + " ms" : us + " µs";
+const fmtShutter = us => `${fmtUs(us)} (1/${Math.round(1e6 / us)}s)`;
+const fmtSize = b => b > 1e6 ? (b / 1e6).toFixed(1) + " MB" : Math.round(b / 1e3) + " kB";
+const fmtElapsed = s => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+let dragging = null;   // id of the slider being dragged
+let recording = false;
+let controlsSeeded = false;
+
+for (const id of ["exp", "gain", "lens"]) {
+  $(id).addEventListener("pointerdown", () => dragging = id);
+  $(id).addEventListener("pointerup", () => dragging = null);
+}
+
+// ---- controls -> server ----
+let postTimer = null;
+function queueControls() {
+  clearTimeout(postTimer);
+  postTimer = setTimeout(sendControls, 200);
+}
+async function sendControls() {
+  const body = {
+    ae_enable: $("ae").checked,
+    exposure_us: sliderToUs(+$("exp").value),
+    gain: +$("gain").value,
+    awb_enable: $("awb").checked,
+    af_continuous: $("af").checked,
+    lens_position: +$("lens").value,
+  };
+  try {
+    await fetch("/api/controls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (e) { /* surfaced via poll */ }
+}
+
+function updateReadouts() {
+  $("expVal").textContent = fmtShutter(sliderToUs(+$("exp").value));
+  $("gainVal").textContent = (+$("gain").value).toFixed(1) + "×";
+  const lp = +$("lens").value;
+  $("lensVal").textContent = lp === 0 ? "∞" : lp.toFixed(1) + " dpt (" + (100 / lp).toFixed(0) + " cm)";
+  $("exp").disabled = $("gain").disabled = $("ae").checked;
+  $("lens").disabled = $("af").checked;
+}
+for (const id of ["exp", "gain", "lens"]) {
+  $(id).addEventListener("input", () => { updateReadouts(); queueControls(); });
+}
+for (const id of ["ae", "awb", "af"]) {
+  $(id).addEventListener("change", () => { updateReadouts(); sendControls(); });
+}
+
+// ---- status poll ----
+async function poll() {
+  let st;
+  try {
+    st = await (await fetch("/api/status")).json();
+    $("conn").textContent = "connected";
+    $("conn").classList.remove("err");
+  } catch (e) {
+    $("conn").textContent = "connection lost";
+    $("conn").classList.add("err");
+    return;
+  }
+
+  const badge = $("backendBadge");
+  badge.textContent = st.mock ? "MOCK CAMERA" : "camera module 3 noir";
+  badge.classList.toggle("mock", st.mock);
+
+  // brightness
+  const s = st.stats;
+  $("roiMean").textContent = s.roi.mean.toFixed(1);
+  $("roiBar").style.width = (s.roi.mean / 255 * 100).toFixed(1) + "%";
+  $("roiMax").textContent = s.roi.max;
+  $("roiClip").textContent = s.roi.clipped_pct + "%";
+  $("fullMean").textContent = s.full.mean.toFixed(1);
+  $("lux").textContent = st.metadata.lux ?? "–";
+  $("clipwarn").style.display = s.roi.clipped_pct > 1 ? "block" : "none";
+
+  // seed controls from server once, then only refresh idle sliders
+  const c = st.controls;
+  if (!controlsSeeded) {
+    $("ae").checked = c.ae_enable;
+    $("awb").checked = c.awb_enable;
+    $("af").checked = c.af_continuous;
+    $("exp").value = usToSlider(c.exposure_us);
+    $("gain").value = c.gain;
+    $("lens").value = c.lens_position;
+    controlsSeeded = true;
+    updateReadouts();
+  }
+
+  const md = st.metadata;
+  $("actual").textContent =
+    `actual: ${md.exposure_us ? fmtShutter(md.exposure_us) : "–"}, gain ${md.gain ?? "–"}×` +
+    (md.digital_gain > 1.01 ? ` (+${md.digital_gain}× digital)` : "") +
+    (md.lens_position != null ? `, lens ${md.lens_position}` : "");
+
+  // recording state
+  recording = st.recording.active;
+  $("recBadge").classList.toggle("on", recording);
+  const btn = $("recBtn");
+  if (recording) {
+    btn.textContent = "■ Stop recording";
+    btn.classList.add("danger"); btn.classList.remove("primary");
+    $("recElapsed").textContent = fmtElapsed(st.recording.elapsed_s) + " — " + st.recording.file;
+  } else {
+    btn.textContent = "● Start recording";
+    btn.classList.add("primary"); btn.classList.remove("danger");
+    $("recElapsed").textContent = "";
+  }
+}
+
+// ---- exposure calibration ----
+$("calUrl").value = localStorage.getItem("calUrl") || "";
+$("calBtn").addEventListener("click", async () => {
+  const url = $("calUrl").value.trim();
+  if (!url) {
+    $("calResult").textContent = "enter the webhook URL of an automation that transmits IR for ~3 s";
+    return;
+  }
+  localStorage.setItem("calUrl", url);
+  const btn = $("calBtn");
+  btn.disabled = true;
+  btn.textContent = "Calibrating… (takes ~10–30 s)";
+  $("calResult").textContent = "";
+  try {
+    const r = await fetch("/api/calibrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trigger_url: url }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+    $("ae").checked = d.controls.ae_enable;
+    $("exp").value = usToSlider(d.controls.exposure_us);
+    $("gain").value = d.controls.gain;
+    updateReadouts();
+    $("calResult").textContent = d.success
+      ? `locked: ${fmtShutter(d.controls.exposure_us)}, gain ${d.controls.gain}× — burst peak px ${d.result.on_peak_px}/255 (ROI mean ${d.result.on_peak_mean}), ambient ${d.result.off_mean}, headroom ${d.result.headroom_pct}% (${d.iterations.length} iteration${d.iterations.length > 1 ? "s" : ""})`
+      : `not calibrated: ${d.reason}`;
+  } catch (e) {
+    $("calResult").textContent = "calibration error: " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Calibrate exposure";
+  }
+});
+
+// ---- recording buttons ----
+$("recBtn").addEventListener("click", async () => {
+  const url = recording ? "/api/record/stop" : "/api/record/start";
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: $("label").value, notes: $("notes").value }),
+  });
+  await poll();
+  await refreshRecordings();
+});
+
+$("snapBtn").addEventListener("click", async () => {
+  await fetch("/api/snapshot", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: $("label").value }),
+  });
+  await refreshRecordings();
+});
+
+// ---- recordings list ----
+const esc = s => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fileLink = (name, text) =>
+  `<a class="filelink" href="/recordings/${encodeURIComponent(name)}">${text}</a>`;
+
+async function refreshRecordings() {
+  let data;
+  try { data = await (await fetch("/api/recordings")).json(); } catch (e) { return; }
+  const table = $("recTable");
+  table.innerHTML = "";
+  $("noRecs").style.display = data.recordings.length ? "none" : "block";
+  for (const r of data.recordings) {
+    const active = r.base === data.active_base;
+    const main = r.video || r.image;
+    const meta = [r.device && `device: ${r.device}`, r.notes].filter(Boolean).join(" — ");
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td class="name">${active ? "🔴 " : ""}` +
+      (main ? `<a href="/recordings/${encodeURIComponent(main)}">${esc(main)}</a>` : esc(r.base)) +
+      (r.csv ? fileLink(r.csv, "csv") : "") +
+      (meta ? `<div class="meta">${esc(meta)}</div>` : "") +
+      `</td>` +
+      `<td class="size">${fmtSize(r.size)}</td>` +
+      `<td style="text-align:right"><button class="del" ${active ? "disabled" : ""}>✕</button></td>`;
+    tr.querySelector("button.del").addEventListener("click", async () => {
+      if (!confirm(`Delete ${r.base} (video + csv + notes)?`)) return;
+      await fetch(`/api/recordings/${encodeURIComponent(r.base)}`, { method: "DELETE" });
+      refreshRecordings();
+    });
+    table.appendChild(tr);
+  }
+}
+
+poll();
+refreshRecordings();
+setInterval(poll, 750);
+setInterval(refreshRecordings, 5000);
+</script>
+</body>
+</html>

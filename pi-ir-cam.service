@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi IR Cam web interface
+After=network-online.target
+
+[Service]
+# Adjust User/paths if your username or install location differs.
+User=pi
+WorkingDirectory=/home/pi/pi-ir-cam
+ExecStart=/home/pi/pi-ir-cam/.venv/bin/python server.py --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=3
+# Live MJPEG streams hold requests open; don't wait long for graceful stop.
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
