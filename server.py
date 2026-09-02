@@ -97,6 +97,7 @@ def snapshot():
 def status():
     return {
         "mock": cam.is_mock,
+        "has_af": cam.has_af,
         "recording": cam.recording_status(),
         "controls": dict(cam.controls),
         "metadata": cam.get_metadata(),

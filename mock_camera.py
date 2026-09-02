@@ -25,6 +25,7 @@ FPS = 12
 
 class MockCamera:
     is_mock = True
+    has_af = True
 
     def __init__(self, recordings_dir: Path):
         self.recordings_dir = recordings_dir

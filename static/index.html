@@ -173,7 +173,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="focusCard">
       <h2>Focus</h2>
       <label class="row"><input type="checkbox" id="af"> Continuous autofocus</label>
       <div class="slider-row">
@@ -274,6 +274,7 @@ async function poll() {
   const badge = $("backendBadge");
   badge.textContent = st.mock ? "MOCK CAMERA" : "camera module 3 noir";
   badge.classList.toggle("mock", st.mock);
+  $("focusCard").style.display = st.has_af ? "" : "none";
 
   // brightness
   const s = st.stats;
