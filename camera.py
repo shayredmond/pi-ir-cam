@@ -84,6 +84,8 @@ class PiCamera:
         self.picam2.configure(config)
         self.picam2.pre_callback = self._on_frame
         self.picam2.start()
+        # Fixed-focus sensors (imx219, imx477, ...) don't advertise the AF controls
+        self.has_af = "AfMode" in self.picam2.camera_controls
         self._apply_controls(self.controls)
 
         self.stream_output = StreamingOutput()
@@ -142,11 +144,12 @@ class PiCamera:
         if not state["ae_enable"]:
             ctrls["ExposureTime"] = int(state["exposure_us"])
             ctrls["AnalogueGain"] = float(state["gain"])
-        if state["af_continuous"]:
-            ctrls["AfMode"] = AF_MODE_CONTINUOUS
-        else:
-            ctrls["AfMode"] = AF_MODE_MANUAL
-            ctrls["LensPosition"] = float(state["lens_position"])
+        if self.has_af:
+            if state["af_continuous"]:
+                ctrls["AfMode"] = AF_MODE_CONTINUOUS
+            else:
+                ctrls["AfMode"] = AF_MODE_MANUAL
+                ctrls["LensPosition"] = float(state["lens_position"])
         self.picam2.set_controls(ctrls)
 
     def set_controls(self, **kwargs) -> dict:
